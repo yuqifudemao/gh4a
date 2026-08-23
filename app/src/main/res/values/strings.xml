@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="translate_page">Translate English on this page</string>
+    <string name="translation_preparing">Preparing translation…</string>
+    <string name="show_original">Show original</string>
+    <string name="translation_complete">Translation complete</string>
+    <string name="translation_failed">Translation failed. Check your connection and try again.</string>
     <string name="app_name">OctoDroid</string>
 
     <!-- Common -->

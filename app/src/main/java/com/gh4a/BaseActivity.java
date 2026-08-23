@@ -78,6 +78,7 @@ import com.gh4a.activities.home.HomeActivity;
 import com.gh4a.fragment.SettingsFragment;
 import com.gh4a.utils.DiagnosticLogger;
 import com.gh4a.utils.IntentUtils;
+import com.gh4a.utils.PageTranslator;
 import com.gh4a.utils.RxUtils;
 import com.gh4a.utils.UiUtils;
 import com.gh4a.widget.SwipeRefreshLayout;
@@ -133,6 +134,7 @@ public abstract class BaseActivity extends AppCompatActivity implements
     private final int[] mProgressColors = new int[2];
     private Animator mHeaderTransition;
     private final Handler mHandler = new Handler();
+    private PageTranslator mPageTranslator;
 
     private final ActivityResultLauncher<Intent> mIssueReportLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -510,6 +512,8 @@ public abstract class BaseActivity extends AppCompatActivity implements
     @Override
     @CallSuper
     public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add(Menu.NONE, R.id.translate_page, Menu.NONE, R.string.translate_page)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         if (!IntentUtils.isNewTaskIntent(getIntent()) && displayDetachAction()) {
             menu.add(Menu.NONE, R.id.detach, Menu.NONE, R.string.detach);
         }
@@ -536,6 +540,28 @@ public abstract class BaseActivity extends AppCompatActivity implements
 
         if (item.getItemId() == R.id.detach) {
             IntentUtils.startNewTask(this, getIntent());
+            return true;
+        }
+
+        if (item.getItemId() == R.id.translate_page) {
+            if (mPageTranslator == null) {
+                mPageTranslator = new PageTranslator(this);
+            }
+            if (mPageTranslator.isTranslated()) {
+                mPageTranslator.restore(getWindow().getDecorView());
+                item.setTitle(R.string.translate_page);
+            } else {
+                item.setTitle(R.string.translation_preparing);
+                mPageTranslator.translate(getWindow().getDecorView(), () -> {
+                    item.setTitle(R.string.show_original);
+                    Snackbar.make(mCoordinatorLayout, R.string.translation_complete,
+                            Snackbar.LENGTH_SHORT).show();
+                }, error -> {
+                    item.setTitle(R.string.translate_page);
+                    Snackbar.make(mCoordinatorLayout, R.string.translation_failed,
+                            Snackbar.LENGTH_LONG).show();
+                });
+            }
             return true;
         }
 
