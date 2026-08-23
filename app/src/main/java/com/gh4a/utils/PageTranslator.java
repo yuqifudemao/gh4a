@@ -38,6 +38,8 @@ import okhttp3.Response;
 public final class PageTranslator {
     private static final String TRANSLATE_ENDPOINT =
             "https://translate.google.com/translate_a/single";
+    private static final String MYMEMORY_ENDPOINT =
+            "https://api.mymemory.translated.net/get";
     private static final String BATCH_SEPARATOR = "[[[9876543210123456789]]]";
     private static final String COLLECT_TEXT_NODES =
             "(function(){window.__octoTranslationNodes=[];var w=document.createTreeWalker(" +
@@ -288,8 +290,56 @@ public final class PageTranslator {
             DiagnosticLogger.log("TRANSLATE", "request failed, characters=" + text.length()
                     + ", reason=" + (lastError != null
                     ? lastError.getClass().getSimpleName() : "unknown"));
-            mActivity.runOnUiThread(failure);
+            mActivity.runOnUiThread(() -> Toast.makeText(mActivity,
+                    com.gh4a.R.string.translation_using_fallback,
+                    Toast.LENGTH_SHORT).show());
+            try {
+                String result = translateWithMyMemory(text);
+                mCache.edit().putString(cacheKey, result).apply();
+                mActivity.runOnUiThread(() -> success.accept(result));
+            } catch (Exception fallbackError) {
+                DiagnosticLogger.log("TRANSLATE", "fallback failed, characters="
+                        + text.length() + ", reason="
+                        + fallbackError.getClass().getSimpleName());
+                mActivity.runOnUiThread(failure);
+            }
         });
+    }
+
+    private String translateWithMyMemory(String text) throws Exception {
+        StringBuilder output = new StringBuilder();
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(start + 450, text.length());
+            if (end < text.length()) {
+                int separator = text.lastIndexOf(BATCH_SEPARATOR, end);
+                int whitespace = Math.max(text.lastIndexOf('\n', end), text.lastIndexOf(' ', end));
+                int boundary = separator > start ? separator : whitespace;
+                if (boundary > start + 100) end = boundary;
+            }
+            String chunk = text.substring(start, end);
+            HttpUrl url = HttpUrl.get(MYMEMORY_ENDPOINT).newBuilder()
+                    .addQueryParameter("q", chunk)
+                    .addQueryParameter("langpair", "en|zh-CN")
+                    .build();
+            try (Response response = mClient.newCall(new Request.Builder().url(url).get().build())
+                    .execute()) {
+                DiagnosticLogger.log("TRANSLATE", "provider=MyMemory, response="
+                        + response.code() + ", characters=" + chunk.length());
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("MyMemory HTTP " + response.code());
+                }
+                JSONObject json = new JSONObject(response.body().string());
+                String translated = json.getJSONObject("responseData")
+                        .optString("translatedText", "");
+                if (translated.isEmpty() || translated.startsWith("MYMEMORY WARNING")) {
+                    throw new IOException("MyMemory returned no translation");
+                }
+                output.append(translated);
+            }
+            start = end;
+        }
+        return output.toString();
     }
 
     public void close() {

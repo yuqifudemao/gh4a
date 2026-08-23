@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.net.URI;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
@@ -207,10 +208,11 @@ public class HtmlUtils {
             boolean isAbsoluteUrl = url.contains(":");
             boolean isAnchorUrl = url.startsWith("#");
             if (!isAbsoluteUrl && !isAnchorUrl) {
-                if (url.startsWith("/")) {
-                    url = baseUrl + url;
-                } else {
-                    url = baseUrl + "/" + url;
+                try {
+                    String normalizedBase = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+                    url = URI.create(normalizedBase).resolve(url).normalize().toString();
+                } catch (IllegalArgumentException ignored) {
+                    url = baseUrl + (url.startsWith("/") ? "" : "/") + url;
                 }
             }
             if (sb == null) {
@@ -1079,4 +1081,3 @@ public class HtmlUtils {
         }
     }
 }
-
