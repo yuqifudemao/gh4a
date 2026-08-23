@@ -85,10 +85,7 @@ jobs:
             adb shell uiautomator dump /sdcard/octodroid-window.xml
             adb pull /sdcard/octodroid-window.xml /tmp/octodroid-window.xml >/dev/null
             grep -q 'com.gh4a.debug:id/login_button' /tmp/octodroid-window.xml
-            if adb logcat -d | grep -A 20 'FATAL EXCEPTION' | grep -q 'com.gh4a'; then
-              adb logcat -d
-              exit 1
-            fi
+            if adb logcat -d | grep -A 20 'FATAL EXCEPTION' | grep -q 'com.gh4a'; then adb logcat -d; exit 1; fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
