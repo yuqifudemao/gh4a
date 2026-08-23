@@ -284,6 +284,7 @@ public final class PageTranslator {
                     lastError = e;
                     break;
                 }
+            }
             DiagnosticLogger.log("TRANSLATE", "request failed, characters=" + text.length()
                     + ", reason=" + (lastError != null
                     ? lastError.getClass().getSimpleName() : "unknown"));
