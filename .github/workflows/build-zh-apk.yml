@@ -41,8 +41,9 @@ jobs:
 
       - name: Test Google online translation
         run: |
-          translated="$(curl --fail --silent --show-error --get \
-            https://translate.googleapis.com/translate_a/single \
+          translated="$(curl --fail --silent --show-error --retry 5 --retry-all-errors \
+            --retry-delay 3 --get \
+            https://translate.google.com/translate_a/single \
             --data-urlencode 'client=gtx' \
             --data-urlencode 'sl=auto' \
             --data-urlencode 'tl=zh-CN' \

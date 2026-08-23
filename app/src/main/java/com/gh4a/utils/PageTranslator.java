@@ -19,9 +19,11 @@ import java.util.List;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.FormBody;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -30,7 +32,8 @@ import okhttp3.Response;
 /** Translates English text visible on the current screen with Google online translation. */
 public final class PageTranslator {
     private static final String TRANSLATE_ENDPOINT =
-            "https://translate.googleapis.com/translate_a/single";
+            "https://translate.google.com/translate_a/single";
+    private static final String BATCH_SEPARATOR = "[[[9876543210123456789]]]";
     private static final String COLLECT_TEXT_NODES =
             "(function(){window.__octoTranslationNodes=[];var w=document.createTreeWalker(" +
             "document.body,NodeFilter.SHOW_TEXT);var n,a=[];while(n=w.nextNode()){var p=n.parentNode;" +
@@ -116,30 +119,18 @@ public final class PageTranslator {
             finished.run();
             return;
         }
-        AtomicInteger pending = new AtomicInteger(segments.size());
-        Runnable segmentFinished = () -> {
-            if (pending.decrementAndGet() != 0) return;
+        List<String> parts = new ArrayList<>();
+        for (TextSegment segment : segments) parts.add(segment.source);
+        translateParts(parts, translations -> {
             SpannableStringBuilder translated = new SpannableStringBuilder(original);
-            boolean changed = false;
             for (int i = segments.size() - 1; i >= 0; i--) {
                 TextSegment segment = segments.get(i);
-                if (segment.translation != null) {
-                    translated.replace(segment.start, segment.end, segment.translation);
-                    changed = true;
-                }
+                translated.replace(segment.start, segment.end, translations.get(i));
             }
-            if (changed) {
-                successes.incrementAndGet();
-                if (!mActivity.isFinishing()) view.setText(translated);
-            }
+            successes.incrementAndGet();
+            if (!mActivity.isFinishing()) view.setText(translated);
             finished.run();
-        };
-        for (TextSegment segment : segments) {
-            translateText(segment.source, text -> {
-                segment.translation = text;
-                segmentFinished.run();
-            }, segmentFinished);
-        }
+        }, finished);
     }
 
     private void translateWebView(WebView webView, AtomicInteger successes, Runnable finished) {
@@ -152,23 +143,65 @@ public final class PageTranslator {
                     return;
                 }
                 mTranslatedWebViews.add(webView);
-                AtomicInteger pending = new AtomicInteger(nodes.length());
+                List<String> parts = new ArrayList<>();
                 for (int i = 0; i < nodes.length(); i++) {
-                    final int index = i;
-                    Runnable nodeFinished = () -> {
-                        if (pending.decrementAndGet() == 0) finished.run();
-                    };
-                    translateText(nodes.getString(i), text -> {
-                        successes.incrementAndGet();
-                        webView.evaluateJavascript("window.__octoTranslationNodes[" + index +
-                                "].nodeValue=" + JSONObject.quote(text), null);
-                        nodeFinished.run();
-                    }, nodeFinished);
+                    parts.add(nodes.getString(i));
                 }
+                translateParts(parts, translations -> {
+                    successes.incrementAndGet();
+                    for (int i = 0; i < translations.size(); i++) {
+                        webView.evaluateJavascript("window.__octoTranslationNodes[" + i +
+                                "].nodeValue=" + JSONObject.quote(translations.get(i)), null);
+                    }
+                    finished.run();
+                }, finished);
             } catch (Exception ignored) {
                 finished.run();
             }
         });
+    }
+
+    private void translateParts(List<String> parts, Consumer<List<String>> success,
+            Runnable failure) {
+        List<BatchGroup> groups = new ArrayList<>();
+        for (int start = 0; start < parts.size();) {
+            int end = start;
+            int length = 0;
+            StringBuilder batch = new StringBuilder();
+            while (end < parts.size()) {
+                String part = parts.get(end);
+                int added = part.length() + (end > start ? BATCH_SEPARATOR.length() : 0);
+                if (end > start && length + added > 3500) break;
+                if (end > start) batch.append(BATCH_SEPARATOR);
+                batch.append(part);
+                length += added;
+                end++;
+            }
+            groups.add(new BatchGroup(start, end, batch.toString()));
+            start = end;
+        }
+        String[] result = new String[parts.size()];
+        AtomicInteger pending = new AtomicInteger(groups.size());
+        AtomicInteger failures = new AtomicInteger();
+        Runnable groupFinished = () -> {
+            if (pending.decrementAndGet() != 0) return;
+            if (failures.get() > 0) failure.run();
+            else success.accept(java.util.Arrays.asList(result));
+        };
+        for (BatchGroup group : groups) {
+            translateText(group.source, translated -> {
+                String[] split = translated.split(Pattern.quote(BATCH_SEPARATOR), -1);
+                if (split.length != group.end - group.start) {
+                    failures.incrementAndGet();
+                } else {
+                    System.arraycopy(split, 0, result, group.start, split.length);
+                }
+                groupFinished.run();
+            }, () -> {
+                failures.incrementAndGet();
+                groupFinished.run();
+            });
+        }
     }
 
     private void translateText(String text, Consumer<String> success, Runnable failure) {
@@ -177,9 +210,9 @@ public final class PageTranslator {
                 .addQueryParameter("sl", "auto")
                 .addQueryParameter("tl", "zh-CN")
                 .addQueryParameter("dt", "t")
-                .addQueryParameter("q", text)
                 .build();
-        mClient.newCall(new Request.Builder().url(url).get().build()).enqueue(new Callback() {
+        FormBody body = new FormBody.Builder().add("q", text).build();
+        mClient.newCall(new Request.Builder().url(url).post(body).build()).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 mActivity.runOnUiThread(failure);
@@ -233,9 +266,19 @@ public final class PageTranslator {
         final int start;
         final int end;
         final String source;
-        String translation;
-
         TextSegment(int start, int end, String source) {
+            this.start = start;
+            this.end = end;
+            this.source = source;
+        }
+    }
+
+    private static final class BatchGroup {
+        final int start;
+        final int end;
+        final String source;
+
+        BatchGroup(int start, int end, String source) {
             this.start = start;
             this.end = end;
             this.source = source;
