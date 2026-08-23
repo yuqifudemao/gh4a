@@ -26,6 +26,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Test GitHub browser authorization
+        env:
+          OAUTH_CLIENT_ID: Ov23liBoCBw6OoTEBesL
+        run: |
+          response="$(curl --fail --silent --show-error \
+            -H "Accept: application/json" \
+            --data-urlencode "client_id=${OAUTH_CLIENT_ID}" \
+            --data-urlencode "scope=user repo gist read:org notifications" \
+            https://github.com/login/device/code)"
+          echo "${response}" | jq -e \
+            '.device_code and .user_code and (.verification_uri == "https://github.com/login/device")' \
+            >/dev/null
+
       - name: Prepare fixed APK signing
         env:
           SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
@@ -63,6 +76,6 @@ jobs:
             gh release create zh-cn-latest OctoDroid-4.6.15-zh-CN.apk \
               --target "${GITHUB_SHA}" \
               --title "OctoDroid 4.6.15 简体中文版" \
-              --notes "基于 OctoDroid 4.6.15 的简体中文社区构建。使用个人访问令牌登录，已隐藏无效的 OAuth 登录入口。" \
+              --notes "基于 OctoDroid 4.6.15 的简体中文社区构建。支持 GitHub 网页授权登录，并保留个人访问令牌登录。" \
               --latest
           fi
