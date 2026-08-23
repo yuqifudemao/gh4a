@@ -25,10 +25,12 @@ ext {
 android {
     compileSdk 36
     defaultConfig {
+        def ciRunNumber = System.getenv('GITHUB_RUN_NUMBER')
+        def zhBuildNumber = ciRunNumber != null ? ciRunNumber.toInteger() : 0
         minSdkVersion 23
         targetSdkVersion 33
-        versionCode 78
-        versionName "4.6.15"
+        versionCode ciRunNumber != null ? 78000 + zhBuildNumber : 78
+        versionName ciRunNumber != null ? "4.6.15-zh.${zhBuildNumber}" : "4.6.15"
         applicationId "com.gh4a"
         resourceConfigurations += ['en', 'zh-rCN']
 
