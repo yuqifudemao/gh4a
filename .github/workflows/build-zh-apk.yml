@@ -67,13 +67,16 @@ jobs:
 
       - name: Install and launch APK on Android 15 emulator
         run: |
-          sdkmanager "platform-tools" "emulator" \
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/avdmanager"
+          EMULATOR="${ANDROID_HOME}/emulator/emulator"
+          "${SDKMANAGER}" "platform-tools" "emulator" \
             "system-images;android-35;google_apis;x86_64" >/dev/null
-          echo no | avdmanager create avd \
+          echo no | "${AVDMANAGER}" create avd \
             --name octodroid-smoke \
             --package "system-images;android-35;google_apis;x86_64" \
             --force
-          nohup emulator -avd octodroid-smoke \
+          nohup "${EMULATOR}" -avd octodroid-smoke \
             -no-window -no-audio -no-boot-anim -no-snapshot \
             -gpu swiftshader_indirect -accel on \
             > /tmp/octodroid-emulator.log 2>&1 &
