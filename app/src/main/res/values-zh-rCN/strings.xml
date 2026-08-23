@@ -15,9 +15,15 @@
     <string name="search_code">搜索代码</string>
     <string name="logout">登出</string>
     <string name="login">登录</string>
-    <string name="login_oauth">通过 OAuth 登录</string>
+    <string name="login_oauth">使用 GitHub 网页授权登录</string>
     <string name="login_token">使用访问令牌登录</string>
-    <string name="login_summary_oauth">通过 OAuth 网页流程登录 GitHub。\n由于登录过程在浏览器中完成，并且浏览器同一时间只能登录一个账户，因此添加新账户前，请先退出浏览器中的 GitHub 账户。\n\n请访问 GitHub 的退出页面完成退出，关闭浏览器后返回本应用继续登录。如果确认浏览器中尚未登录，也可以直接继续。</string>
+    <string name="login_summary_oauth">APP 会显示一次性验证码并打开 GitHub。粘贴验证码、确认授权后，OctoDroid 会自动完成登录，不需要手动创建访问令牌。</string>
+    <string name="device_login_title">在 GitHub 授权 OctoDroid</string>
+    <string name="device_login_message">您的一次性验证码是：\n\n%1$s\n\n验证码已自动复制。打开 GitHub 后粘贴并确认授权，APP 将自动登录。验证码 15 分钟内有效。</string>
+    <string name="device_login_open">打开 GitHub</string>
+    <string name="device_login_cancel">取消登录</string>
+    <string name="device_login_copied">授权验证码已复制</string>
+    <string name="device_login_failed">GitHub 网页授权失败：%1$s</string>
     <string name="credentials_error_empty">此项不能为空。</string>
     <string name="credentials_error_invalid_token">输入的内容不像有效的访问令牌。</string>
     <string name="credentials_token">访问令牌</string>

@@ -34,7 +34,10 @@ android {
         applicationId "com.gh4a"
         resourceConfigurations += ['en', 'zh-rCN']
 
-        buildConfigField 'String', 'CLIENT_ID', clientProps.getProperty('ClientId', '""')
+        // OAuth client IDs are public identifiers. This community OAuth app uses
+        // GitHub's device flow, so no client secret is embedded in the APK.
+        buildConfigField 'String', 'CLIENT_ID', clientProps.getProperty(
+                'ClientId', '"Ov23liBoCBw6OoTEBesL"')
         buildConfigField 'String', 'CLIENT_SECRET', clientProps.getProperty('ClientSecret', '""')
     }
 

@@ -48,7 +48,8 @@ public class LoginModeChooserFragment extends DialogFragment implements
         return new LoginModeChooserFragment();
     }
 
-    public static final String SCOPES = "user,repo,gist,read:org,notifications";
+    // Device flow requires a space-delimited scope list.
+    public static final String SCOPES = "user repo gist read:org notifications";
 
     private RadioGroup mModeGroup;
     private View mOauthContainer;
@@ -93,9 +94,9 @@ public class LoginModeChooserFragment extends DialogFragment implements
             }
         };
 
-        // Community builds do not ship the upstream project's private OAuth
-        // client credentials. Default to the supported access-token flow.
-        mModeGroup.check(R.id.token_button);
+        // The community build uses GitHub's device flow and does not embed a
+        // client secret. Prefer the simpler browser authorization flow.
+        mModeGroup.check(R.id.oauth_button);
 
         TextView oauthHint = view.findViewById(R.id.oauth_hint);
         replaceURLSpansIfNeeded(oauthHint.getText());

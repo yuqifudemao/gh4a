@@ -15,14 +15,18 @@
  */
 package com.gh4a.activities;
 
-import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.IdRes;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 
 import com.gh4a.utils.ActivityResultHelpers;
 import com.google.android.material.appbar.AppBarLayout;
@@ -41,26 +45,34 @@ import com.gh4a.fragment.LoginModeChooserFragment;
 import com.gh4a.utils.ApiHelpers;
 import com.gh4a.utils.IntentUtils;
 import com.gh4a.utils.RxUtils;
-import com.meisolsson.githubsdk.core.ServiceGenerator;
 import com.meisolsson.githubsdk.model.User;
-import com.meisolsson.githubsdk.model.request.RequestToken;
-import com.meisolsson.githubsdk.service.OAuthService;
 import com.meisolsson.githubsdk.service.users.UserService;
 
+import org.json.JSONObject;
+
+import java.io.IOException;
+
 import io.reactivex.Single;
+import io.reactivex.disposables.Disposable;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
  * The Github4Android activity.
  */
 public class Github4AndroidActivity extends BaseActivity implements
         View.OnClickListener, LoginModeChooserFragment.ParentCallback {
-    private static final String OAUTH_URL = "https://github.com/login/oauth/authorize";
-    private static final String PARAM_CLIENT_ID = "client_id";
-    private static final String PARAM_CODE = "code";
-    private static final String PARAM_SCOPE = "scope";
-    private static final String PARAM_CALLBACK_URI = "redirect_uri";
+    private static final String DEVICE_CODE_URL = "https://github.com/login/device/code";
+    private static final String ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
+    private static final Uri DEVICE_LOGIN_URI = Uri.parse("https://github.com/login/device");
+    private static final String DEVICE_GRANT_TYPE =
+            "urn:ietf:params:oauth:grant-type:device_code";
 
-    private static final Uri CALLBACK_URI = Uri.parse("gh4a://oauth");
+    private final OkHttpClient mOauthClient = new OkHttpClient();
+    private Disposable mDeviceLoginDisposable;
+    private AlertDialog mDeviceLoginDialog;
 
     private View mContent;
     private View mProgress;
@@ -111,38 +123,6 @@ public class Github4AndroidActivity extends BaseActivity implements
     }
 
     private boolean handleIntent(Intent intent) {
-        Uri data = intent.getData();
-        if (data != null
-                && data.getScheme().equals(CALLBACK_URI.getScheme())
-                && data.getHost().equals(CALLBACK_URI.getHost())) {
-            final String code = data.getQueryParameter(PARAM_CODE);
-            if (code == null) {
-                onLoginCanceled();
-                return true;
-            }
-
-            OAuthService service = ServiceGenerator.createAuthService();
-            RequestToken request = RequestToken.builder()
-                    .clientId(BuildConfig.CLIENT_ID)
-                    .clientSecret(BuildConfig.CLIENT_SECRET)
-                    .code(code)
-                    .build();
-
-            service.getToken(request)
-                    .map(ApiHelpers::throwOnFailure)
-                    .flatMap(token -> {
-                        UserService userService = ServiceFactory.get(UserService.class, true,
-                                null, token.accessToken(), null);
-                        Single<User> userSingle = userService.getUser()
-                                .map(ApiHelpers::throwOnFailure);
-                        return Single.zip(Single.just(token), userSingle,
-                                (t, user) -> Pair.create(t.accessToken(), user));
-                    })
-                    .compose(RxUtils::doInBackground)
-                    .subscribe(pair -> onLoginFinished(pair.first, pair.second), this::handleLoadFailure);
-            return true;
-        }
-
         return false;
     }
 
@@ -209,7 +189,9 @@ public class Github4AndroidActivity extends BaseActivity implements
 
     @Override
     public void onLoginStartOauth() {
-        launchOauthLogin(this);
+        requestDeviceCode()
+                .compose(RxUtils::doInBackground)
+                .subscribe(this::showDeviceLogin, this::onDeviceLoginFailure);
     }
 
     @Override
@@ -227,6 +209,10 @@ public class Github4AndroidActivity extends BaseActivity implements
 
     @Override
     public void onLoginCanceled() {
+        if (mDeviceLoginDisposable != null) {
+            mDeviceLoginDisposable.dispose();
+            mDeviceLoginDisposable = null;
+        }
         setProgressShown(false);
     }
 
@@ -235,13 +221,147 @@ public class Github4AndroidActivity extends BaseActivity implements
         mProgress.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
-    public static void launchOauthLogin(Activity activity) {
-        Uri uri = Uri.parse(OAUTH_URL)
-                .buildUpon()
-                .appendQueryParameter(PARAM_CLIENT_ID, BuildConfig.CLIENT_ID)
-                .appendQueryParameter(PARAM_SCOPE, LoginModeChooserFragment.SCOPES)
-                .appendQueryParameter(PARAM_CALLBACK_URI, CALLBACK_URI.toString())
-                .build();
-        IntentUtils.openInCustomTabOrBrowser(activity, uri);
+    private Single<DeviceCode> requestDeviceCode() {
+        return Single.fromCallable(() -> {
+            FormBody body = new FormBody.Builder()
+                    .add("client_id", BuildConfig.CLIENT_ID)
+                    .add("scope", LoginModeChooserFragment.SCOPES)
+                    .build();
+            Request request = new Request.Builder()
+                    .url(DEVICE_CODE_URL)
+                    .header("Accept", "application/json")
+                    .post(body)
+                    .build();
+            try (Response response = mOauthClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("HTTP " + response.code());
+                }
+                JSONObject json = new JSONObject(response.body().string());
+                if (json.has("error")) {
+                    throw new IOException(json.optString("error_description",
+                            json.optString("error")));
+                }
+                return new DeviceCode(
+                        json.getString("device_code"),
+                        json.getString("user_code"),
+                        Math.max(5, json.optInt("interval", 5)),
+                        json.optInt("expires_in", 900));
+            }
+        });
+    }
+
+    private void showDeviceLogin(DeviceCode deviceCode) {
+        ClipboardManager clipboard =
+                (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText("GitHub device code",
+                deviceCode.userCode));
+        Toast.makeText(this, R.string.device_login_copied, Toast.LENGTH_SHORT).show();
+
+        mDeviceLoginDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.device_login_title)
+                .setMessage(getString(R.string.device_login_message, deviceCode.userCode))
+                .setPositiveButton(R.string.device_login_open,
+                        (dialog, which) -> IntentUtils.openInCustomTabOrBrowser(
+                                this, DEVICE_LOGIN_URI))
+                .setNegativeButton(R.string.device_login_cancel,
+                        (dialog, which) -> onLoginCanceled())
+                .setOnCancelListener(dialog -> onLoginCanceled())
+                .show();
+
+        mDeviceLoginDisposable = pollForAccessToken(deviceCode)
+                .flatMap(token -> {
+                    UserService userService = ServiceFactory.get(UserService.class, true,
+                            null, token, null);
+                    return userService.getUser()
+                            .map(ApiHelpers::throwOnFailure)
+                            .map(user -> Pair.create(token, user));
+                })
+                .compose(RxUtils::doInBackground)
+                .subscribe(pair -> {
+                    if (mDeviceLoginDialog != null) {
+                        mDeviceLoginDialog.dismiss();
+                    }
+                    onLoginFinished(pair.first, pair.second);
+                }, this::onDeviceLoginFailure);
+    }
+
+    private Single<String> pollForAccessToken(DeviceCode deviceCode) {
+        return Single.create(emitter -> {
+            int intervalSeconds = deviceCode.intervalSeconds;
+            long expiresAt = System.currentTimeMillis() + deviceCode.expiresInSeconds * 1000L;
+            while (!emitter.isDisposed() && System.currentTimeMillis() < expiresAt) {
+                Thread.sleep(intervalSeconds * 1000L);
+
+                FormBody body = new FormBody.Builder()
+                        .add("client_id", BuildConfig.CLIENT_ID)
+                        .add("device_code", deviceCode.deviceCode)
+                        .add("grant_type", DEVICE_GRANT_TYPE)
+                        .build();
+                Request request = new Request.Builder()
+                        .url(ACCESS_TOKEN_URL)
+                        .header("Accept", "application/json")
+                        .post(body)
+                        .build();
+                try (Response response = mOauthClient.newCall(request).execute()) {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        throw new IOException("HTTP " + response.code());
+                    }
+                    JSONObject json = new JSONObject(response.body().string());
+                    String token = json.optString("access_token", null);
+                    if (token != null) {
+                        emitter.onSuccess(token);
+                        return;
+                    }
+
+                    String error = json.optString("error");
+                    if ("authorization_pending".equals(error)) {
+                        continue;
+                    }
+                    if ("slow_down".equals(error)) {
+                        intervalSeconds += 5;
+                        continue;
+                    }
+                    throw new IOException(json.optString("error_description", error));
+                }
+            }
+            if (!emitter.isDisposed()) {
+                emitter.onError(new IOException("Authorization code expired"));
+            }
+        });
+    }
+
+    private void onDeviceLoginFailure(Throwable error) {
+        if (mDeviceLoginDialog != null) {
+            mDeviceLoginDialog.dismiss();
+            mDeviceLoginDialog = null;
+        }
+        Toast.makeText(this,
+                getString(R.string.device_login_failed, error.getMessage()),
+                Toast.LENGTH_LONG).show();
+        handleLoadFailure(error);
+        setProgressShown(false);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mDeviceLoginDisposable != null) {
+            mDeviceLoginDisposable.dispose();
+        }
+        super.onDestroy();
+    }
+
+    private static class DeviceCode {
+        final String deviceCode;
+        final String userCode;
+        final int intervalSeconds;
+        final int expiresInSeconds;
+
+        DeviceCode(String deviceCode, String userCode, int intervalSeconds,
+                int expiresInSeconds) {
+            this.deviceCode = deviceCode;
+            this.userCode = userCode;
+            this.intervalSeconds = intervalSeconds;
+            this.expiresInSeconds = expiresInSeconds;
+        }
     }
 }
