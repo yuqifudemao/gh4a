@@ -27,9 +27,9 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 import retrofit2.converter.moshi.MoshiConverterFactory;
 
 public class ServiceFactory {
-    private static final String DEFAULT_HEADER_ACCEPT = "application/vnd.github.v3+json," +
-            "application/vnd.github.v3.raw+json," +
-            "application/vnd.github.v3.html+json";
+    private static final String DEFAULT_HEADER_ACCEPT = "application/vnd.github+json";
+    private static final String GITHUB_API_VERSION = "2026-03-10";
+    private static final String USER_AGENT = "OctoDroid-zh-CN/4.6.15";
 
     private final static HttpLoggingInterceptor LOGGING_INTERCEPTOR = new HttpLoggingInterceptor()
             .setLevel(HttpLoggingInterceptor.Level.BASIC);
@@ -161,7 +161,7 @@ public class ServiceFactory {
                     String tokenToUse = token != null
                             ? token : Gh4Application.get().getAuthToken();
                     if (tokenToUse != null) {
-                        requestBuilder.header("Authorization", "Token " + tokenToUse);
+                        requestBuilder.header("Authorization", "Bearer " + tokenToUse);
                     } else {
                         requestBuilder.header("Authorization",
                                 Credentials.basic(BuildConfig.CLIENT_ID, BuildConfig.CLIENT_SECRET));
@@ -180,6 +180,8 @@ public class ServiceFactory {
                         }
                         requestBuilder.addHeader("Accept", header);
                     }
+                    requestBuilder.header("X-GitHub-Api-Version", GITHUB_API_VERSION);
+                    requestBuilder.header("User-Agent", USER_AGENT);
 
                     return chain.proceed(requestBuilder.build());
                 });
