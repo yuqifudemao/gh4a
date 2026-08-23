@@ -15,6 +15,7 @@
  */
 package com.gh4a.activities;
 
+import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -64,6 +65,7 @@ import okhttp3.Response;
  */
 public class Github4AndroidActivity extends BaseActivity implements
         View.OnClickListener, LoginModeChooserFragment.ParentCallback {
+    private static final String EXTRA_START_DEVICE_LOGIN = "start_device_login";
     private static final String DEVICE_CODE_URL = "https://github.com/login/device/code";
     private static final String ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
     private static final Uri DEVICE_LOGIN_URI = Uri.parse("https://github.com/login/device");
@@ -93,7 +95,8 @@ public class Github4AndroidActivity extends BaseActivity implements
         super.onCreate(savedInstanceState);
 
         Gh4Application app = Gh4Application.get();
-        if (app.isAuthorized()) {
+        boolean startDeviceLogin = getIntent().getBooleanExtra(EXTRA_START_DEVICE_LOGIN, false);
+        if (app.isAuthorized() && !startDeviceLogin) {
             if (!handleIntent(getIntent())) {
                 goToToplevelActivity();
             }
@@ -112,6 +115,10 @@ public class Github4AndroidActivity extends BaseActivity implements
             mProgress = findViewById(R.id.login_progress_container);
 
             handleIntent(getIntent());
+            if (startDeviceLogin) {
+                setProgressShown(true);
+                onLoginStartOauth();
+            }
         }
     }
 
@@ -219,6 +226,13 @@ public class Github4AndroidActivity extends BaseActivity implements
     private void setProgressShown(boolean show) {
         mContent.setVisibility(show ? View.GONE : View.VISIBLE);
         mProgress.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    /** Starts device-flow login while adding another account from HomeActivity. */
+    public static void launchOauthLogin(Activity activity) {
+        Intent intent = new Intent(activity, Github4AndroidActivity.class);
+        intent.putExtra(EXTRA_START_DEVICE_LOGIN, true);
+        activity.startActivity(intent);
     }
 
     private Single<DeviceCode> requestDeviceCode() {
