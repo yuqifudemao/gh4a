@@ -79,8 +79,7 @@ jobs:
           script: |
             adb install -r OctoDroid-4.6.15-zh-CN.apk
             adb logcat -c
-            adb shell am start -W \
-              -n com.gh4a.debug/com.gh4a.activities.Github4AndroidActivity
+            adb shell am start -W -n com.gh4a.debug/com.gh4a.activities.Github4AndroidActivity
             sleep 8
             test -n "$(adb shell pidof com.gh4a.debug | tr -d "\r")"
             adb shell uiautomator dump /sdcard/octodroid-window.xml
