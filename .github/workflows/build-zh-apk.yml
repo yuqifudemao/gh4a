@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -57,6 +57,42 @@ jobs:
 
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk OctoDroid-4.6.15-zh-CN.apk
+
+      - name: Enable Android emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install and launch APK on Android 15 emulator
+        run: |
+          sdkmanager "platform-tools" "emulator" \
+            "system-images;android-35;google_apis;x86_64" >/dev/null
+          echo no | avdmanager create avd \
+            --name octodroid-smoke \
+            --package "system-images;android-35;google_apis;x86_64" \
+            --force
+          nohup emulator -avd octodroid-smoke \
+            -no-window -no-audio -no-boot-anim -no-snapshot \
+            -gpu swiftshader_indirect -accel on \
+            > /tmp/octodroid-emulator.log 2>&1 &
+          adb wait-for-device
+          timeout 300 bash -c \
+            'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = "1" ]; do sleep 5; done'
+          adb install -r OctoDroid-4.6.15-zh-CN.apk
+          adb logcat -c
+          adb shell am start -W \
+            -n com.gh4a.debug/com.gh4a.activities.Github4AndroidActivity
+          sleep 8
+          test -n "$(adb shell pidof com.gh4a.debug | tr -d "\r")"
+          adb shell uiautomator dump /sdcard/octodroid-window.xml
+          adb pull /sdcard/octodroid-window.xml /tmp/octodroid-window.xml >/dev/null
+          grep -q 'com.gh4a.debug:id/login_button' /tmp/octodroid-window.xml
+          if adb logcat -d | grep -A 20 'FATAL EXCEPTION' | grep -q 'com.gh4a'; then
+            adb logcat -d
+            exit 1
+          fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
