@@ -70,12 +70,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          VERSION_NAME="4.6.15-zh.${GITHUB_RUN_NUMBER}"
+          VERSION_TAG="zh-cn-${VERSION_NAME}"
+          RELEASE_NOTES="基于 OctoDroid 4.6.15 的简体中文社区构建。版本 ${VERSION_NAME}，支持 GitHub 网页授权登录，并保留个人访问令牌登录。"
+
+          # Keep a stable URL for in-place updates and links in the README.
           if gh release view zh-cn-latest >/dev/null 2>&1; then
             gh release upload zh-cn-latest OctoDroid-4.6.15-zh-CN.apk --clobber
+            gh release edit zh-cn-latest \
+              --title "OctoDroid ${VERSION_NAME} 简体中文版" \
+              --notes "${RELEASE_NOTES}"
           else
             gh release create zh-cn-latest OctoDroid-4.6.15-zh-CN.apk \
               --target "${GITHUB_SHA}" \
-              --title "OctoDroid 4.6.15 简体中文版" \
-              --notes "基于 OctoDroid 4.6.15 的简体中文社区构建。支持 GitHub 网页授权登录，并保留个人访问令牌登录。" \
+              --title "OctoDroid ${VERSION_NAME} 简体中文版" \
+              --notes "${RELEASE_NOTES}"
+          fi
+
+          # Create a visible, versioned release for every successful build.
+          if gh release view "${VERSION_TAG}" >/dev/null 2>&1; then
+            gh release upload "${VERSION_TAG}" OctoDroid-4.6.15-zh-CN.apk --clobber
+            gh release edit "${VERSION_TAG}" \
+              --title "OctoDroid ${VERSION_NAME} 简体中文版" \
+              --notes "${RELEASE_NOTES}" \
+              --latest
+          else
+            gh release create "${VERSION_TAG}" OctoDroid-4.6.15-zh-CN.apk \
+              --target "${GITHUB_SHA}" \
+              --title "OctoDroid ${VERSION_NAME} 简体中文版" \
+              --notes "${RELEASE_NOTES}" \
               --latest
           fi
