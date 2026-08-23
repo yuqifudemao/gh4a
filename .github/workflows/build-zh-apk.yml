@@ -72,6 +72,7 @@ jobs:
           EMULATOR="${ANDROID_HOME}/emulator/emulator"
           "${SDKMANAGER}" "platform-tools" "emulator" \
             "system-images;android-35;google_apis;x86_64" >/dev/null
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
           echo no | "${AVDMANAGER}" create avd \
             --name octodroid-smoke \
             --package "system-images;android-35;google_apis;x86_64" \
