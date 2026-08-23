@@ -12,6 +12,7 @@ import com.meisolsson.githubsdk.core.StringResponseConverterFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -41,7 +42,10 @@ public class ServiceFactory {
         Request request = chain.request();
         try {
             Response response = chain.proceed(request);
-            if (response.code() >= 400) {
+            if (response.code() == 404 && isNormalState404(request)) {
+                DiagnosticLogger.log("STATE", request.method() + " "
+                        + request.url().encodedPath() + " -> false (404)");
+            } else if (response.code() >= 400) {
                 DiagnosticLogger.log("HTTP", request.method() + " "
                         + request.url().newBuilder().query(null).build()
                         + " -> " + response.code());
@@ -54,6 +58,24 @@ public class ServiceFactory {
             throw error;
         }
     };
+
+    private final static Interceptor RETRY_GET_TIMEOUT_INTERCEPTOR = chain -> {
+        Request request = chain.request();
+        try {
+            return chain.proceed(request);
+        } catch (SocketTimeoutException firstTimeout) {
+            if (!"GET".equals(request.method())) throw firstTimeout;
+            DiagnosticLogger.log("NETWORK", "Timed out; retrying GET "
+                    + request.url().encodedPath());
+            return chain.proceed(request);
+        }
+    };
+
+    private static boolean isNormalState404(Request request) {
+        String path = request.url().encodedPath();
+        return "GET".equals(request.method()) && (path.startsWith("/user/starred/")
+                || path.endsWith("/subscription") || path.startsWith("/user/following/"));
+    }
 
     private final static Interceptor CACHE_STATUS_INTERCEPTOR = chain -> {
         Response response = chain.proceed(chain.request());
@@ -168,6 +190,7 @@ public class ServiceFactory {
     private static <S> S createService(Class<S> serviceClass, final boolean bypassCache,
             final String acceptHeader, final String token, final Integer pageSize) {
         OkHttpClient.Builder clientBuilder = sApiHttpClient.newBuilder()
+                .addInterceptor(RETRY_GET_TIMEOUT_INTERCEPTOR)
                 .addInterceptor(DIAGNOSTIC_INTERCEPTOR)
                 .addInterceptor(PAGINATION_INTERCEPTOR)
                 .addNetworkInterceptor(ETAG_WORKAROUND_INTERCEPTOR)
@@ -233,6 +256,9 @@ public class ServiceFactory {
         int twentyMB = 20 * 1024 * 1024;
         sApiHttpClient = new OkHttpClient.Builder()
                 .cache(new Cache(new File(context.getCacheDir(), "api-http"), twentyMB))
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
         sImageHttpClient = sApiHttpClient.newBuilder()
                 .cache(new Cache(new File(context.getCacheDir(), "image-http"), twentyMB))

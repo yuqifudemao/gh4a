@@ -85,6 +85,7 @@
     <string name="load_failure_explanation_parsing">解析 GitHub 返回的数据时出错。你可以点击下方按钮向应用开发者报告此问题。</string>
     <string name="load_failure_explanation_with_reason">从 GitHub 加载数据失败。GitHub 返回的原因如下：\n%1$s</string>
     <string name="snackbar_network_error">%1$s。请检查网络连接。</string>
+    <string name="load_failure_timeout">网络连接超时，请检查网络或代理后点击“重试”。</string>
     <string name="snackbar_application_error">%1$s。报告问题时，可以复制错误日志以提供更多详情。</string>
     <string name="snackbar_github_api_error">%1$s: %2$s</string>
     <string name="snackbar_copy_error_msg_action">复制错误信息</string>

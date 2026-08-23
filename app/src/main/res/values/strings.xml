@@ -87,6 +87,7 @@
     <string name="load_failure_explanation_parsing">There was an error while parsing GitHub\'s response. You can use the button below to report this issue to the app developers.</string>
     <string name="load_failure_explanation_with_reason">Loading the data from GitHub failed. GitHub told us the following reason:\n%1$s</string>
     <string name="snackbar_network_error">%1$s. Please check your internet connection.</string>
+    <string name="load_failure_timeout">The connection timed out. Check your network or proxy, then tap Retry.</string>
     <string name="snackbar_application_error">%1$s. You can copy the error log to provide more details when reporting the issue to the app developers.</string>
     <string name="snackbar_github_api_error">%1$s: %2$s</string>
     <string name="snackbar_copy_error_msg_action">Copy error message</string>

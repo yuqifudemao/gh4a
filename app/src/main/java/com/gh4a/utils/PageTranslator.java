@@ -80,6 +80,11 @@ public final class PageTranslator {
         List<TextView> textViews = new ArrayList<>();
         List<WebView> webViews = new ArrayList<>();
         collectViews(root, textViews, webViews);
+        int characterCount = 0;
+        for (TextView view : textViews) characterCount += view.getText().length();
+        DiagnosticLogger.log("TRANSLATE", "page=" + mActivity.getClass().getSimpleName()
+                + ", characters=" + characterCount + ", textViews=" + textViews.size()
+                + ", webViews=" + webViews.size() + ", provider=Google");
         AtomicInteger pending = new AtomicInteger(textViews.size() + webViews.size());
         AtomicInteger successes = new AtomicInteger();
         if (pending.get() == 0) {
@@ -215,12 +220,16 @@ public final class PageTranslator {
         mClient.newCall(new Request.Builder().url(url).post(body).build()).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                DiagnosticLogger.log("TRANSLATE", "request failed, characters=" + text.length()
+                        + ", reason=" + e.getClass().getSimpleName());
                 mActivity.runOnUiThread(failure);
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try (response) {
+                    DiagnosticLogger.log("TRANSLATE", "response=" + response.code()
+                            + ", characters=" + text.length());
                     if (!response.isSuccessful() || response.body() == null) {
                         mActivity.runOnUiThread(failure);
                         return;

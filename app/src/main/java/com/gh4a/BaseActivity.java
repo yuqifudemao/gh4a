@@ -89,6 +89,8 @@ import com.philosophicalhacker.lib.RxLoader;
 import com.squareup.moshi.JsonDataException;
 
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
+import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -697,7 +699,10 @@ public abstract class BaseActivity extends AppCompatActivity implements
             ClientErrorResponse.BlockReason blockReason = re != null && re.getResponse() != null
                     ? re.getResponse().blockReason() : null;
 
-            if (blockReason != null) {
+            if (isNetworkTimeout(e)) {
+                messageView.setText(R.string.load_failure_timeout);
+                retryButton.setVisibility(View.VISIBLE);
+            } else if (blockReason != null) {
                 messageView.setText(
                         getString(R.string.load_failure_explanation_dmca, blockReason.htmlUrl()));
                 retryButton.setVisibility(View.GONE);
@@ -719,6 +724,20 @@ public abstract class BaseActivity extends AppCompatActivity implements
         } else {
             error.setVisibility(View.GONE);
         }
+    }
+
+    private static boolean isNetworkTimeout(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof SocketTimeoutException) return true;
+            if (current instanceof InterruptedIOException
+                    && current.getMessage() != null
+                    && current.getMessage().toLowerCase(java.util.Locale.US).contains("timeout")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private void launchIssueCreationForError(Throwable e) {
