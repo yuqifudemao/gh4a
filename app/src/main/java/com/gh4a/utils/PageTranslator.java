@@ -1,11 +1,13 @@
 package com.gh4a.utils;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.text.SpannableStringBuilder;
 
 import androidx.annotation.NonNull;
@@ -14,15 +16,18 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.FormBody;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
@@ -45,13 +50,22 @@ public final class PageTranslator {
             "forEach(function(n,i){n.nodeValue=window.__octoTranslationOriginal[i];});})()";
 
     private final Activity mActivity;
-    private final OkHttpClient mClient = new OkHttpClient();
+    private final OkHttpClient mClient = new OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build();
+    private final ExecutorService mTranslationQueue = Executors.newSingleThreadExecutor();
+    private final SharedPreferences mCache;
     private final WeakHashMap<TextView, CharSequence> mOriginalText = new WeakHashMap<>();
     private final List<WebView> mTranslatedWebViews = new ArrayList<>();
     private boolean mTranslated;
+    private volatile boolean mRateLimited;
+    private volatile boolean mRateLimitNoticeShown;
 
     public PageTranslator(@NonNull Activity activity) {
         mActivity = activity;
+        mCache = activity.getSharedPreferences("online_translation_cache", Activity.MODE_PRIVATE);
     }
 
     public boolean isTranslated() {
@@ -96,6 +110,7 @@ public final class PageTranslator {
             if (pending.decrementAndGet() == 0) {
                 mTranslated = successes.get() > 0;
                 if (mTranslated) onComplete.run();
+                else if (mRateLimited) onFailure.accept(new RateLimitException());
                 else onFailure.accept(new IOException("No text could be translated"));
             }
         };
@@ -176,7 +191,7 @@ public final class PageTranslator {
             while (end < parts.size()) {
                 String part = parts.get(end);
                 int added = part.length() + (end > start ? BATCH_SEPARATOR.length() : 0);
-                if (end > start && length + added > 3500) break;
+                if (end > start && length + added > 2500) break;
                 if (end > start) batch.append(BATCH_SEPARATOR);
                 batch.append(part);
                 length += added;
@@ -210,6 +225,13 @@ public final class PageTranslator {
     }
 
     private void translateText(String text, Consumer<String> success, Runnable failure) {
+        String cacheKey = cacheKey(text);
+        String cached = mCache.getString(cacheKey, null);
+        if (cached != null) {
+            DiagnosticLogger.log("TRANSLATE", "cache hit, characters=" + text.length());
+            mActivity.runOnUiThread(() -> success.accept(cached));
+            return;
+        }
         HttpUrl url = HttpUrl.get(TRANSLATE_ENDPOINT).newBuilder()
                 .addQueryParameter("client", "gtx")
                 .addQueryParameter("sl", "auto")
@@ -217,22 +239,32 @@ public final class PageTranslator {
                 .addQueryParameter("dt", "t")
                 .build();
         FormBody body = new FormBody.Builder().add("q", text).build();
-        mClient.newCall(new Request.Builder().url(url).post(body).build()).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                DiagnosticLogger.log("TRANSLATE", "request failed, characters=" + text.length()
-                        + ", reason=" + e.getClass().getSimpleName());
-                mActivity.runOnUiThread(failure);
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) {
-                try (response) {
+        Request request = new Request.Builder().url(url).post(body).build();
+        mTranslationQueue.execute(() -> {
+            Exception lastError = null;
+            for (int attempt = 0; attempt < 5; attempt++) {
+                try (Response response = mClient.newCall(request).execute()) {
                     DiagnosticLogger.log("TRANSLATE", "response=" + response.code()
-                            + ", characters=" + text.length());
+                            + ", characters=" + text.length() + ", attempt=" + (attempt + 1));
+                    if (response.code() == 429) {
+                        mRateLimited = true;
+                        if (!mRateLimitNoticeShown) {
+                            mRateLimitNoticeShown = true;
+                            mActivity.runOnUiThread(() -> Toast.makeText(mActivity,
+                                    com.gh4a.R.string.translation_rate_limited_retrying,
+                                    Toast.LENGTH_LONG).show());
+                        }
+                        if (attempt < 4) {
+                            long delay = 1000L << attempt;
+                            DiagnosticLogger.log("TRANSLATE", "rate limited; retry in "
+                                    + delay + " ms");
+                            Thread.sleep(delay);
+                            continue;
+                        }
+                    }
                     if (!response.isSuccessful() || response.body() == null) {
-                        mActivity.runOnUiThread(failure);
-                        return;
+                        lastError = new IOException("HTTP " + response.code());
+                        break;
                     }
                     JSONArray chunks = new JSONArray(response.body().string()).getJSONArray(0);
                     StringBuilder translated = new StringBuilder();
@@ -240,12 +272,45 @@ public final class PageTranslator {
                         JSONArray chunk = chunks.optJSONArray(i);
                         if (chunk != null) translated.append(chunk.optString(0));
                     }
-                    mActivity.runOnUiThread(() -> success.accept(translated.toString()));
+                    String result = translated.toString();
+                    mCache.edit().putString(cacheKey, result).apply();
+                    mActivity.runOnUiThread(() -> success.accept(result));
+                    return;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    lastError = e;
+                    break;
                 } catch (Exception e) {
-                    mActivity.runOnUiThread(failure);
+                    lastError = e;
+                    break;
                 }
-            }
+            DiagnosticLogger.log("TRANSLATE", "request failed, characters=" + text.length()
+                    + ", reason=" + (lastError != null
+                    ? lastError.getClass().getSimpleName() : "unknown"));
+            mActivity.runOnUiThread(failure);
         });
+    }
+
+    public void close() {
+        mTranslationQueue.shutdownNow();
+    }
+
+    private static String cacheKey(String text) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(text.getBytes(StandardCharsets.UTF_8));
+            StringBuilder key = new StringBuilder("v1_");
+            for (byte b : digest) key.append(String.format("%02x", b));
+            return key.toString();
+        } catch (Exception ignored) {
+            return "v1_" + text.hashCode();
+        }
+    }
+
+    public static final class RateLimitException extends IOException {
+        RateLimitException() {
+            super("Google translation rate limit exceeded");
+        }
     }
 
     private static void collectViews(View view, List<TextView> textViews,

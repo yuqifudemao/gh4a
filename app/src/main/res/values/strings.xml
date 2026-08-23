@@ -5,6 +5,8 @@
     <string name="show_original">Show original</string>
     <string name="translation_complete">Translation complete</string>
     <string name="translation_failed">Translation failed. Check your connection and try again.</string>
+    <string name="translation_rate_limited_retrying">Translation requests are busy. Retrying shortly…</string>
+    <string name="translation_rate_limited_failed">Google Translate is temporarily rate-limiting requests. Please try again later.</string>
     <string name="app_name">OctoDroid</string>
 
     <!-- Common -->

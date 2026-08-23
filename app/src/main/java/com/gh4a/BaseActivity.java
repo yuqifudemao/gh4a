@@ -560,7 +560,10 @@ public abstract class BaseActivity extends AppCompatActivity implements
                             Snackbar.LENGTH_SHORT).show();
                 }, error -> {
                     item.setTitle(R.string.translate_page);
-                    Snackbar.make(mCoordinatorLayout, R.string.translation_failed,
+                    int message = error instanceof PageTranslator.RateLimitException
+                            ? R.string.translation_rate_limited_failed
+                            : R.string.translation_failed;
+                    Snackbar.make(mCoordinatorLayout, message,
                             Snackbar.LENGTH_LONG).show();
                 });
             }
@@ -568,6 +571,12 @@ public abstract class BaseActivity extends AppCompatActivity implements
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mPageTranslator != null) mPageTranslator.close();
+        super.onDestroy();
     }
 
     @Override
