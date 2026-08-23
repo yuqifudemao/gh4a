@@ -17,6 +17,7 @@
             android:id="@+id/oauth_button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:visibility="gone"
             android:text="@string/login_oauth" />
 
         <com.google.android.material.radiobutton.MaterialRadioButton
@@ -30,7 +31,8 @@
     <FrameLayout
         android:id="@+id/oauth_container"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:visibility="gone">
 
         <com.gh4a.widget.LinkHandlingTextView
             android:id="@+id/oauth_hint"
