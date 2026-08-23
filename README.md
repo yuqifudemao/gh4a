@@ -4,6 +4,18 @@ OctoDroid
 =========
 This application provides access to [GitHub](https://github.com/) and lets you stay connected with your network
 
+简体中文版
+----------
+
+### [⬇️ 点击下载最新版 APK](https://github.com/yuqifudemao/gh4a/releases/download/zh-cn-latest/OctoDroid-4.6.15-zh-CN.apk)
+
+- 基于 OctoDroid 4.6.15 开源源码制作
+- 已补充简体中文界面
+- 请使用 GitHub Personal Access Token 登录
+- 如果安装时提示签名冲突，请先卸载旧测试版再安装
+
+[查看版本发布页](https://github.com/yuqifudemao/gh4a/releases/tag/zh-cn-latest)
+
 Download
 --------
 [<img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid" height="80px">](https://f-droid.org/packages/com.gh4a/)
