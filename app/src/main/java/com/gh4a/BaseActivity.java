@@ -76,6 +76,7 @@ import com.gh4a.activities.Github4AndroidActivity;
 import com.gh4a.activities.SearchActivity;
 import com.gh4a.activities.home.HomeActivity;
 import com.gh4a.fragment.SettingsFragment;
+import com.gh4a.utils.DiagnosticLogger;
 import com.gh4a.utils.IntentUtils;
 import com.gh4a.utils.RxUtils;
 import com.gh4a.utils.UiUtils;
@@ -208,6 +209,7 @@ public abstract class BaseActivity extends AppCompatActivity implements
     }
 
     private void handleFailure(String text, Throwable e) {
+        DiagnosticLogger.logThrowable(text, e);
         ApiRequestException are = e instanceof ApiRequestException ? (ApiRequestException) e : null;
         boolean isAuthError = are != null && are.getStatus() == HttpURLConnection.HTTP_UNAUTHORIZED;
         if (isAuthError) {

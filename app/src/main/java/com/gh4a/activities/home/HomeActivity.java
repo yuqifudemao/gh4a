@@ -31,6 +31,7 @@ import com.gh4a.Gh4Application;
 import com.gh4a.R;
 import com.gh4a.ServiceFactory;
 import com.gh4a.activities.Github4AndroidActivity;
+import com.gh4a.activities.DiagnosticsActivity;
 import com.gh4a.activities.UserActivity;
 import com.gh4a.fragment.LoginModeChooserFragment;
 import com.gh4a.fragment.NotificationListFragment;
@@ -268,6 +269,9 @@ public class HomeActivity extends BaseFragmentPagerActivity implements
                 return true;
             case R.id.settings:
                 mSettingsLauncher.launch(null);
+                return true;
+            case R.id.diagnostics:
+                startActivity(new Intent(this, DiagnosticsActivity.class));
                 return true;
         }
 

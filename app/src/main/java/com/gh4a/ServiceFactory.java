@@ -4,12 +4,14 @@ import android.content.Context;
 import android.util.Log;
 
 import com.gh4a.utils.ApiHelpers;
+import com.gh4a.utils.DiagnosticLogger;
 import com.meisolsson.githubsdk.core.ByteArrayResponseConverterFactory;
 import com.meisolsson.githubsdk.core.GitHubPaginationInterceptor;
 import com.meisolsson.githubsdk.core.ServiceGenerator;
 import com.meisolsson.githubsdk.core.StringResponseConverterFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -35,6 +37,23 @@ public class ServiceFactory {
             .setLevel(HttpLoggingInterceptor.Level.BASIC);
 
     private final static Interceptor PAGINATION_INTERCEPTOR = new GitHubPaginationInterceptor();
+    private final static Interceptor DIAGNOSTIC_INTERCEPTOR = chain -> {
+        Request request = chain.request();
+        try {
+            Response response = chain.proceed(request);
+            if (response.code() >= 400) {
+                DiagnosticLogger.log("HTTP", request.method() + " "
+                        + request.url().newBuilder().query(null).build()
+                        + " -> " + response.code());
+            }
+            return response;
+        } catch (IOException error) {
+            DiagnosticLogger.log("NETWORK", request.method() + " "
+                    + request.url().newBuilder().query(null).build()
+                    + " -> " + error);
+            throw error;
+        }
+    };
 
     private final static Interceptor CACHE_STATUS_INTERCEPTOR = chain -> {
         Response response = chain.proceed(chain.request());
@@ -149,6 +168,7 @@ public class ServiceFactory {
     private static <S> S createService(Class<S> serviceClass, final boolean bypassCache,
             final String acceptHeader, final String token, final Integer pageSize) {
         OkHttpClient.Builder clientBuilder = sApiHttpClient.newBuilder()
+                .addInterceptor(DIAGNOSTIC_INTERCEPTOR)
                 .addInterceptor(PAGINATION_INTERCEPTOR)
                 .addNetworkInterceptor(ETAG_WORKAROUND_INTERCEPTOR)
                 .addNetworkInterceptor(CACHE_MAX_AGE_INTERCEPTOR)

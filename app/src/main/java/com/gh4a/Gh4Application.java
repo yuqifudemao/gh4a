@@ -24,6 +24,7 @@ import android.os.Build;
 import android.util.LongSparseArray;
 
 import com.gh4a.fragment.SettingsFragment;
+import com.gh4a.utils.DiagnosticLogger;
 import com.gh4a.utils.StringUtils;
 import com.gh4a.worker.NotificationsWorker;
 import com.meisolsson.githubsdk.model.User;
@@ -67,6 +68,15 @@ public class Gh4Application extends Application implements
         super.onCreate();
 
         sInstance = this;
+        DiagnosticLogger.init(this);
+        Thread.UncaughtExceptionHandler previousHandler =
+                Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+            DiagnosticLogger.logThrowable("CRASH", error);
+            if (previousHandler != null) {
+                previousHandler.uncaughtException(thread, error);
+            }
+        });
 
         SharedPreferences prefs = getPrefs();
 

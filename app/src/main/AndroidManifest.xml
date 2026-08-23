@@ -141,6 +141,7 @@
         <activity android:name=".activities.WikiListActivity" android:exported="false" />
         <activity android:name=".activities.home.HomeActivity" android:exported="false" />
         <activity android:name=".activities.ReviewActivity" android:exported="false" />
+        <activity android:name=".activities.DiagnosticsActivity" android:exported="false" />
 
         <activity
             android:name=".activities.SettingsActivity"
@@ -201,6 +202,16 @@
             android:name=".db.SuggestionsProvider"
             android:authorities="${applicationId}.SuggestionsProvider"
             android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostics_paths" />
+        </provider>
 
         <meta-data android:name="android.webkit.WebView.MetricsOptOut" android:value="true" />
     </application>

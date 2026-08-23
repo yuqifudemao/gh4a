@@ -61,6 +61,10 @@
     </group>
     <group android:id="@+id/settings">
         <item
+            android:id="@+id/diagnostics"
+            android:title="@string/diagnostics"
+            android:icon="@drawable/icon_settings"/>
+        <item
             android:id="@id/settings"
             android:title="@string/settings"
             android:icon="@drawable/icon_settings"/>

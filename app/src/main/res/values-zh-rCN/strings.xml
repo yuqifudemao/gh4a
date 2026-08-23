@@ -26,6 +26,13 @@
     <string name="ok">确认</string>
     <string name="cancel">取消</string>
     <string name="settings">设置</string>
+    <string name="diagnostics">诊断中心</string>
+    <string name="diagnostics_description">日志只保存在本机，点击“发送诊断报告”后才会分享。访问令牌和认证请求头会自动隐藏。</string>
+    <string name="diagnostics_share">发送诊断报告</string>
+    <string name="diagnostics_clear">清空日志</string>
+    <string name="diagnostics_cleared">诊断日志已清空</string>
+    <string name="diagnostics_empty">暂时没有诊断记录。</string>
+    <string name="diagnostics_share_failed">无法生成诊断报告。</string>
     <string name="about">关于</string>
     <string name="retry">重试</string>
     <string name="open_source_components">开源组件</string>

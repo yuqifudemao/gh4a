@@ -28,6 +28,13 @@
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
     <string name="settings">Settings</string>
+    <string name="diagnostics">Diagnostics</string>
+    <string name="diagnostics_description">Logs stay on this device until you choose Share. Access tokens and authorization headers are automatically removed.</string>
+    <string name="diagnostics_share">Share diagnostic report</string>
+    <string name="diagnostics_clear">Clear logs</string>
+    <string name="diagnostics_cleared">Diagnostic log cleared</string>
+    <string name="diagnostics_empty">No diagnostic events recorded yet.</string>
+    <string name="diagnostics_share_failed">Unable to create diagnostic report.</string>
     <string name="about">About</string>
     <string name="retry">Retry</string>
     <string name="open_source_components">Open source components</string>
