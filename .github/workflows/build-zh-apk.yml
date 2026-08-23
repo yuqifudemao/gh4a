@@ -66,37 +66,30 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Install and launch APK on Android 15 emulator
-        run: |
-          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
-          AVDMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/avdmanager"
-          EMULATOR="${ANDROID_HOME}/emulator/emulator"
-          "${SDKMANAGER}" "platform-tools" "emulator" \
-            "system-images;android-35;google_apis;x86_64" >/dev/null
-          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
-          echo no | "${AVDMANAGER}" create avd \
-            --name octodroid-smoke \
-            --package "system-images;android-35;google_apis;x86_64" \
-            --force
-          nohup "${EMULATOR}" -avd octodroid-smoke \
-            -no-window -no-audio -no-boot-anim -no-snapshot \
-            -gpu swiftshader_indirect -accel on \
-            > /tmp/octodroid-emulator.log 2>&1 &
-          adb wait-for-device
-          timeout 300 bash -c \
-            'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = "1" ]; do sleep 5; done'
-          adb install -r OctoDroid-4.6.15-zh-CN.apk
-          adb logcat -c
-          adb shell am start -W \
-            -n com.gh4a.debug/com.gh4a.activities.Github4AndroidActivity
-          sleep 8
-          test -n "$(adb shell pidof com.gh4a.debug | tr -d "\r")"
-          adb shell uiautomator dump /sdcard/octodroid-window.xml
-          adb pull /sdcard/octodroid-window.xml /tmp/octodroid-window.xml >/dev/null
-          grep -q 'com.gh4a.debug:id/login_button' /tmp/octodroid-window.xml
-          if adb logcat -d | grep -A 20 'FATAL EXCEPTION' | grep -q 'com.gh4a'; then
-            adb logcat -d
-            exit 1
-          fi
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -camera-back none -no-snapshot-save
+          script: |
+            adb install -r OctoDroid-4.6.15-zh-CN.apk
+            adb logcat -c
+            adb shell am start -W \
+              -n com.gh4a.debug/com.gh4a.activities.Github4AndroidActivity
+            sleep 8
+            test -n "$(adb shell pidof com.gh4a.debug | tr -d "\r")"
+            adb shell uiautomator dump /sdcard/octodroid-window.xml
+            adb pull /sdcard/octodroid-window.xml /tmp/octodroid-window.xml >/dev/null
+            grep -q 'com.gh4a.debug:id/login_button' /tmp/octodroid-window.xml
+            if adb logcat -d | grep -A 20 'FATAL EXCEPTION' | grep -q 'com.gh4a'; then
+              adb logcat -d
+              exit 1
+            fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
