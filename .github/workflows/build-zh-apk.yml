@@ -26,6 +26,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Prepare fixed APK signing
+        env:
+          SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+        run: |
+          echo "${SIGNING_KEY}" | base64 --decode > app/octodroid-zh.jks
+          {
+            echo "STORE_FILE=octodroid-zh.jks"
+            echo "STORE_PASSWORD=${SIGNING_PASSWORD}"
+            echo "KEY_ALIAS=octodroid"
+            echo "KEY_PASSWORD=${SIGNING_PASSWORD}"
+          } > signing.properties
+
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug
 

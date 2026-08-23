@@ -122,6 +122,7 @@ if (props.containsKey('STORE_FILE')
     android.signingConfigs.release.storePassword = props['STORE_PASSWORD']
     android.signingConfigs.release.keyAlias = props['KEY_ALIAS']
     android.signingConfigs.release.keyPassword = props['KEY_PASSWORD']
+    android.buildTypes.debug.signingConfig = android.signingConfigs.release
 } else {
     println 'signing.properties not found or incomplete'
     android.buildTypes.release.signingConfig = null
