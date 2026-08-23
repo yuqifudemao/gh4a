@@ -39,6 +39,19 @@ jobs:
             '.device_code and .user_code and (.verification_uri == "https://github.com/login/device")' \
             >/dev/null
 
+      - name: Test Google online translation
+        run: |
+          translated="$(curl --fail --silent --show-error --get \
+            https://translate.googleapis.com/translate_a/single \
+            --data-urlencode 'client=gtx' \
+            --data-urlencode 'sl=auto' \
+            --data-urlencode 'tl=zh-CN' \
+            --data-urlencode 'dt=t' \
+            --data-urlencode 'q=This repository contains Android source code.' \
+            | jq -r '.[0][0][0]')"
+          test -n "${translated}"
+          test "${translated}" != 'This repository contains Android source code.'
+
       - name: Prepare fixed APK signing
         env:
           SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}

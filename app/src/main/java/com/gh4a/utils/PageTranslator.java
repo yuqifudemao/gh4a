@@ -6,6 +6,7 @@ import android.view.ViewGroup;
 import android.webkit.WebView;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.text.SpannableStringBuilder;
 
 import androidx.annotation.NonNull;
 
@@ -91,15 +92,54 @@ public final class PageTranslator {
             }
         };
         for (TextView view : textViews) {
-            CharSequence original = view.getText();
-            mOriginalText.put(view, original);
-            translateText(original.toString(), text -> {
-                successes.incrementAndGet();
-                if (!mActivity.isFinishing()) view.setText(text);
-                finishedOne.run();
-            }, finishedOne);
+            translateTextView(view, successes, finishedOne);
         }
         for (WebView webView : webViews) translateWebView(webView, successes, finishedOne);
+    }
+
+    private void translateTextView(TextView view, AtomicInteger successes, Runnable finished) {
+        CharSequence original = view.getText();
+        mOriginalText.put(view, original);
+        String source = original.toString();
+        List<TextSegment> segments = new ArrayList<>();
+        int start = 0;
+        for (int i = 0; i <= source.length(); i++) {
+            if (i == source.length() || source.charAt(i) == '\n') {
+                String line = source.substring(start, i);
+                if (shouldTranslate(line) && line.indexOf('\ufffc') < 0) {
+                    segments.add(new TextSegment(start, i, line));
+                }
+                start = i + 1;
+            }
+        }
+        if (segments.isEmpty()) {
+            finished.run();
+            return;
+        }
+        AtomicInteger pending = new AtomicInteger(segments.size());
+        Runnable segmentFinished = () -> {
+            if (pending.decrementAndGet() != 0) return;
+            SpannableStringBuilder translated = new SpannableStringBuilder(original);
+            boolean changed = false;
+            for (int i = segments.size() - 1; i >= 0; i--) {
+                TextSegment segment = segments.get(i);
+                if (segment.translation != null) {
+                    translated.replace(segment.start, segment.end, segment.translation);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                successes.incrementAndGet();
+                if (!mActivity.isFinishing()) view.setText(translated);
+            }
+            finished.run();
+        };
+        for (TextSegment segment : segments) {
+            translateText(segment.source, text -> {
+                segment.translation = text;
+                segmentFinished.run();
+            }, segmentFinished);
+        }
     }
 
     private void translateWebView(WebView webView, AtomicInteger successes, Runnable finished) {
@@ -184,8 +224,21 @@ public final class PageTranslator {
     }
 
     private static boolean shouldTranslate(String text) {
-        if (text.length() < 2 || !text.matches(".*[A-Za-z]{2}.*")) return false;
+        if (text.length() < 2 || !text.matches("(?s).*[A-Za-z]{2}.*")) return false;
         if (text.matches("(?i)^(https?://|git@|[a-f0-9]{7,40}$).*")) return false;
         return !text.matches("^[\\w./@:#%+~=\\-]+$");
+    }
+
+    private static final class TextSegment {
+        final int start;
+        final int end;
+        final String source;
+        String translation;
+
+        TextSegment(int start, int end, String source) {
+            this.start = start;
+            this.end = end;
+            this.source = source;
+        }
     }
 }
